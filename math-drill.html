@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>Drill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0f10;
+    --bg-soft:#1a1a1c;
+    --ink:#f4f1ea;
+    --ink-soft:#8a8a8a;
+    --rule:#2a2a2c;
+    --ok:#3ecf6a;
+    --bad:#ff5a5a;
+    --accent:#f4f1ea;
+    --pad: clamp(16px, 3vw, 32px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    background:var(--bg);
+    color:var(--ink);
+    font-feature-settings:"tnum" 1, "zero" 1;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input{font:inherit;color:inherit}
+
+  /* ---------- Shell ---------- */
+  .app{
+    height:100dvh;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    padding:var(--pad);
+    gap:var(--pad);
+  }
+
+  /* ---------- Top bar ---------- */
+  .top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .brand{
+    display:flex;align-items:baseline;gap:10px;color:var(--ink);font-weight:500;
+  }
+  .brand .dot{
+    width:8px;height:8px;background:var(--ink);display:inline-block;transform:translateY(-1px);
+  }
+  .stats{
+    display:flex;gap:22px;align-items:center;flex-wrap:wrap;
+  }
+  .stats .s{display:flex;gap:6px;align-items:baseline}
+  .stats .s b{color:var(--ink);font-weight:500}
+  .mode-switch{display:flex;gap:2px}
+  .mode-switch button{
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:6px 10px;border:1px solid var(--ink);color:var(--ink-soft);
+    transition:background .08s, color .08s;
+  }
+  .mode-switch button.active{background:var(--ink);color:var(--bg)}
+  .mode-switch button + button{border-left:none}
+
+  /* ---------- Main stage ---------- */
+  .stage{
+    position:relative;
+    display:grid;
+    place-items:center;
+    border-top:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);
+  }
+  .center{
+    display:flex;flex-direction:column;align-items:center;gap:clamp(16px,3vw,32px);
+    width:100%;max-width:900px;padding:0 16px;text-align:center;
+  }
+  .question{
+    font-weight:400;
+    color:#ffffff;
+    font-size:clamp(40px, 9vw, 120px);
+    line-height:1.05;
+    letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;
+    width:100%;
+    max-width:100%;
+    overflow-wrap:break-word;
+    word-break:keep-all;
+    padding:0 8px;
+  }
+  .question .op{color:#b8b8b8;padding:0 .12em;font-weight:300;white-space:nowrap}
+  .answer{
+    width:min(480px, 80vw);
+    background:transparent;
+    border:none;
+    border-bottom:2px solid var(--ink);
+    text-align:center;
+    font-size:clamp(36px, 7vw, 72px);
+    font-weight:400;
+    padding:8px 0 14px;
+    outline:none;
+    letter-spacing:.02em;
+    font-variant-numeric:tabular-nums;
+    caret-color:var(--ink);
+    color:var(--ink);
+  }
+  .answer::placeholder{color:#4a4a4a;font-weight:300}
+
+  .submit-btn{
+    margin-top:4px;
+    font-size:13px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    padding:14px 36px;
+    background:var(--ink);
+    color:var(--bg);
+    border:1px solid var(--ink);
+    font-weight:500;
+    transition:background .08s, color .08s, transform .05s;
+    min-width:180px;
+  }
+  .submit-btn:hover{background:transparent;color:var(--ink)}
+  .submit-btn:active{transform:translateY(1px)}
+
+  .hint{
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);
+  }
+
+  /* feedback flash */
+  .flash-ok .question, .flash-ok .answer{color:var(--ok)}
+  .flash-ok .answer{border-bottom-color:var(--ok)}
+  .flash-bad .question, .flash-bad .answer{color:var(--bad)}
+  .flash-bad .answer{border-bottom-color:var(--bad)}
+  .correct-line{
+    font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--bad);
+    min-height:1em;
+  }
+  .correct-line.ok{color:var(--ok)}
+
+  /* ---------- Timer ---------- */
+  .timer-wrap{
+    position:absolute;left:0;right:0;top:0;height:3px;background:transparent;
+  }
+  .timer-bar{
+    height:100%;background:var(--ink);width:100%;transform-origin:left center;
+    transition:transform linear;
+  }
+  .timer-bar.danger{background:var(--bad)}
+
+  /* ---------- Bottom bar ---------- */
+  .bot{
+    display:flex;justify-content:space-between;align-items:center;gap:16px;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
+  }
+  .bot .kbd{border:1px solid #3a3a3c;padding:2px 6px;margin:0 2px;border-radius:2px;color:var(--ink)}
+  .bot button{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    border-bottom:1px solid var(--ink-soft);padding:2px 0;color:var(--ink);
+  }
+  .bot button:hover{border-color:var(--ink)}
+
+  /* difficulty meter */
+  .diff{display:flex;gap:3px;align-items:center}
+  .diff i{width:10px;height:6px;background:#2a2a2c;display:inline-block}
+  .diff i.on{background:var(--ink)}
+
+  /* ---------- Overlays ---------- */
+  .overlay{
+    position:fixed;inset:0;background:var(--bg);
+    display:grid;place-items:center;padding:var(--pad);
+    z-index:10;
+    overflow-y:auto;
+  }
+  .panel{
+    width:min(640px, 100%);
+    border:1px solid var(--ink);
+    padding:clamp(24px, 4vw, 48px);
+    max-height:calc(100dvh - 2 * var(--pad));
+    overflow-y:auto;
+  }
+  .panel h1{
+    font-size:clamp(28px, 4vw, 44px);font-weight:400;letter-spacing:-.01em;
+    margin-bottom:4px;
+  }
+  .panel .sub{
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);
+    margin-bottom:28px;
+  }
+  .panel h2{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+    margin:24px 0 10px;font-weight:500;
+  }
+  .row{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    border:1px solid var(--ink);padding:8px 12px;
+    font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink);
+  }
+  .chip.active{background:var(--ink);color:var(--bg)}
+  .chip.ghost{border-color:#3a3a3c;color:var(--ink-soft)}
+  .chip.ghost.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+  .start-row{display:flex;justify-content:space-between;align-items:center;margin-top:32px;gap:16px;flex-wrap:wrap}
+  .start-row .big{
+    font-size:14px;letter-spacing:.14em;text-transform:uppercase;
+    border:1px solid var(--ink);padding:14px 22px;background:var(--ink);color:var(--bg);
+  }
+  .start-row .big:hover{background:var(--bg);color:var(--ink)}
+  .muted{color:var(--ink-soft);font-size:12px;letter-spacing:.08em}
+
+  /* results */
+  .res-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:24px 32px;margin-top:16px;
+  }
+  .res-grid .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px}
+  .res-grid .v{font-size:clamp(28px,4vw,44px);font-weight:300;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .bar{height:2px;background:#2a2a2c;position:relative;margin-top:6px}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+  .topic-row{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.06em;padding:8px 0;border-bottom:1px dashed #2a2a2c}
+  .topic-row:last-child{border-bottom:none}
+  .topic-row .n{color:var(--ink-soft)}
+  .verdict{
+    margin-top:24px;padding:16px;border:1px solid var(--ink);
+    font-size:13px;line-height:1.55;
+  }
+  .verdict b{font-weight:500}
+
+  /* lifetime stats row */
+  .stats-row{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;
+    padding:12px;border:1px solid #2a2a2c;
+  }
+  .stats-row .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
+  .stats-row .v{font-size:18px;font-weight:400;font-variant-numeric:tabular-nums}
+
+  /* history list */
+  .hist-item{
+    display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;
+    padding:10px 0;border-bottom:1px dashed #2a2a2c;
+    font-size:12px;letter-spacing:.04em;
+  }
+  .hist-item:last-child{border-bottom:none}
+  .hist-when{color:var(--ink-soft)}
+  .hist-meta{color:var(--ink-soft);font-size:11px}
+  .hist-acc{font-variant-numeric:tabular-nums;min-width:48px;text-align:right}
+  .hist-acc.good{color:var(--ok)}
+  .hist-acc.bad{color:var(--bad)}
+  .hist-answered{color:var(--ink-soft);font-size:11px;min-width:40px;text-align:right}
+
+  /* subtle grain */
+  .app::after{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;
+    background-image:
+      radial-gradient(#000 1px, transparent 1px);
+    background-size:3px 3px;
+    z-index:1;
+  }
+  .stage, .top, .bot{position:relative;z-index:2}
+
+  @media (max-width:640px){
+    .top{font-size:10px}
+    .stats{gap:14px}
+    .stats .s{gap:4px}
+    .bot .keys{display:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ START OVERLAY ============ -->
+<div class="overlay" id="startOverlay">
+  <div class="panel">
+    <h1>Drill.</h1>
+    <div class="sub">Mental math — continuous flow</div>
+
+    <h2>Stage</h2>
+    <div class="row" id="stageRow">
+      <button class="chip" data-stage="1">1 · Foundation</button>
+      <button class="chip" data-stage="2">2 · Intermediate</button>
+      <button class="chip" data-stage="3">3 · Guesstimate</button>
+    </div>
+
+    <h2>Focus (optional)</h2>
+    <div class="row" id="focusRow">
+      <button class="chip ghost active" data-focus="mixed">Mixed</button>
+      <button class="chip ghost" data-focus="add">Addition</button>
+      <button class="chip ghost" data-focus="sub">Subtraction</button>
+      <button class="chip ghost" data-focus="mul">Multiplication</button>
+      <button class="chip ghost" data-focus="div">Division</button>
+      <button class="chip ghost" data-focus="pct">Percentages</button>
+      <button class="chip ghost" data-focus="est">Guesstimate</button>
+      <button class="chip ghost" data-focus="speed">Speed drill</button>
+    </div>
+
+    <h2>Session length</h2>
+    <div class="row" id="lenRow">
+      <button class="chip" data-len="3">3 min</button>
+      <button class="chip" data-len="5">5 min</button>
+      <button class="chip" data-len="7">7 min</button>
+    </div>
+
+    <div class="start-row">
+      <div class="muted">Enter to submit · Esc to quit</div>
+      <button class="big" id="startBtn">Begin →</button>
+    </div>
+
+    <div id="historyBlock" style="display:none">
+      <h2>Your history <button id="clearHistBtn" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);background:none;border:none;border-bottom:1px solid #3a3a3c;margin-left:12px;padding:0 0 1px;cursor:pointer">clear</button></h2>
+      <div class="stats-row" id="lifetimeStats"></div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RESULTS OVERLAY ============ -->
+<div class="overlay" id="resultsOverlay" style="display:none">
+  <div class="panel">
+    <h1 id="resTitle">Session complete.</h1>
+    <div class="sub" id="resSub">—</div>
+
+    <div class="res-grid">
+      <div><div class="k">Accuracy</div><div class="v" id="rAcc">—</div></div>
+      <div><div class="k">Avg response</div><div class="v" id="rTime">—</div></div>
+      <div><div class="k">Best streak</div><div class="v" id="rBest">—</div></div>
+      <div><div class="k">Answered</div><div class="v" id="rTotal">—</div></div>
+    </div>
+
+    <h2>By topic</h2>
+    <div id="rTopics"></div>
+
+    <div class="verdict" id="rVerdict"></div>
+
+    <div class="start-row">
+      <button class="big" id="againBtn">Run it back →</button>
+      <button class="muted" id="backBtn" style="background:none;border:none;text-transform:uppercase;letter-spacing:.1em">← Change settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div class="app" id="app" style="display:none">
+  <div class="top">
+    <div class="brand"><span class="dot"></span> DRILL</div>
+    <div class="stats">
+      <div class="s"><span>Streak</span><b id="sStreak">0</b></div>
+      <div class="s"><span>Best</span><b id="sBest">0</b></div>
+      <div class="s"><span>Acc</span><b id="sAcc">—</b></div>
+      <div class="s"><span>Avg</span><b id="sAvg">—</b></div>
+      <div class="s"><span>Time</span><b id="sSession">—</b></div>
+    </div>
+    <div class="mode-switch" id="modeSwitch" title="Keys 1–3 to switch">
+      <button data-stage="1">S1</button>
+      <button data-stage="2">S2</button>
+      <button data-stage="3">S3</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="timer-wrap"><div class="timer-bar" id="timerBar"></div></div>
+    <div class="center">
+      <div class="question" id="question">—</div>
+      <input class="answer" id="answer" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="?" />
+      <button class="submit-btn" id="submitBtn">Submit ↵</button>
+      <div class="correct-line" id="correctLine">&nbsp;</div>
+      <div class="hint" id="hint">&nbsp;</div>
+    </div>
+  </div>
+
+  <div class="bot">
+    <div class="diff" title="Difficulty">
+      <span style="margin-right:8px">LVL</span>
+      <i id="d1"></i><i id="d2"></i><i id="d3"></i><i id="d4"></i><i id="d5"></i><i id="d6"></i><i id="d7"></i>
+      <span id="dNum" style="margin-left:10px">1</span>
+    </div>
+    <div class="keys">
+      <span class="kbd">Enter</span> submit · <span class="kbd">Esc</span> end · <span class="kbd">1–3</span> stage
+    </div>
+    <div><button id="endBtn">End session</button></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DRILL — adaptive mental math
+   ========================================================= */
+
+/* ---------------- Utilities ---------------- */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* =========================================================
+   0. PERSISTENT STORAGE (localStorage)
+   Stores the last ~50 sessions locally on device.
+   ========================================================= */
+const STORE_KEY = 'drill.history.v1';
+const STORE_MAX = 50;
+
+const Store = {
+  load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  },
+  save(arr) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch {}
+  },
+  clear() {
+    try { localStorage.removeItem(STORE_KEY); } catch {}
+  },
+};
+
+function saveSession(rec) {
+  if (!rec || !rec.answered) return; // skip empty sessions
+  const hist = Store.load();
+  hist.unshift(rec);
+  Store.save(hist.slice(0, STORE_MAX));
+}
+
+function lifetimeSummary(hist) {
+  let answered = 0, correct = 0, timeSum = 0, bestStreak = 0;
+  for (const s of hist) {
+    answered += s.answered || 0;
+    correct  += s.correct  || 0;
+    timeSum  += (s.avgTime || 0) * (s.answered || 0);
+    bestStreak = Math.max(bestStreak, s.bestStreak || 0);
+  }
+  return {
+    sessions: hist.length,
+    answered,
+    acc: answered ? correct / answered : 0,
+    avgTime: answered ? timeSum / answered : 0,
+    bestStreak,
+  };
+}
+
+function formatRelative(ts) {
+  const d = Date.now() - ts;
+  const min = Math.floor(d / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.floor(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+function renderHistory() {
+  const hist = Store.load();
+  const block = $('#historyBlock');
+  if (!hist.length) { block.style.display = 'none'; return; }
+  block.style.display = 'block';
+
+  const sum = lifetimeSummary(hist);
+  $('#lifetimeStats').innerHTML = `
+    <div><div class="k">Sessions</div><div class="v">${sum.sessions}</div></div>
+    <div><div class="k">Answered</div><div class="v">${sum.answered}</div></div>
+    <div><div class="k">Lifetime acc</div><div class="v">${Math.round(sum.acc*100)}%</div></div>
+    <div><div class="k">Best streak</div><div class="v">${sum.bestStreak}</div></div>
+  `;
+
+  const focusLabel = { mixed:'Mixed', add:'Addition', sub:'Subtraction', mul:'Multiplication', div:'Division', pct:'Percentages', est:'Guesstimate', speed:'Speed' };
+  const list = $('#historyList');
+  list.innerHTML = hist.slice(0, 15).map(s => {
+    const acc = Math.round((s.acc || 0) * 100);
+    const cls = acc >= 80 ? 'good' : acc < 60 ? 'bad' : '';
+    return `
+      <div class="hist-item">
+        <div>
+          <div>S${s.stage} · ${focusLabel[s.focus] || s.focus} · ${s.lenMin}m</div>
+          <div class="hist-meta">${formatRelative(s.ts)} · avg ${(s.avgTime||0).toFixed(1)}s · streak ${s.bestStreak||0}</div>
+        </div>
+        <div class="hist-answered">${s.correct}/${s.answered}</div>
+        <div class="hist-acc ${cls}">${acc}%</div>
+        <div class="hist-meta">L${s.maxLevel||'?'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* =========================================================
+   1. QUESTION GENERATORS
+   Each returns { text, answer, topic, tolerance? }
+   tolerance: for guesstimate, acceptable % error
+   ========================================================= */
+const Gen = {
+  /* Addition — size scales with level */
+  add(L) {
+    // L: 1..7
+    const max = [20, 50, 99, 299, 999, 2999, 9999][clamp(L-1,0,6)];
+    const min = L <= 2 ? 1 : Math.floor(max/10);
+    const a = rand(min, max), b = rand(min, max);
+    return { text: `${a} + ${b}`, answer: a + b, topic: 'add' };
+  },
+
+  /* Subtraction — positive results */
+  sub(L) {
+    const max = [20, 50, 99, 299, 999, 2999, 9999][clamp(L-1,0,6)];
+    const min = L <= 2 ? 1 : Math.floor(max/10);
+    let a = rand(min, max), b = rand(min, max);
+    if (b > a) [a,b] = [b,a];
+    return { text: `${a} − ${b}`, answer: a - b, topic: 'sub' };
+  },
+
+  /* Multiplication — tables then larger */
+  mul(L) {
+    let a, b;
+    if (L <= 2)      { a = rand(2,9);  b = rand(2,9); }
+    else if (L === 3){ a = rand(2,12); b = rand(2,12); }
+    else if (L === 4){ a = rand(2,12); b = rand(10,25); }
+    else if (L === 5){ a = rand(11,25); b = rand(11,25); }
+    else if (L === 6){ a = rand(12,49); b = rand(2,12); }
+    else             { a = rand(13,99); b = rand(11,19); }
+    return { text: `${a} × ${b}`, answer: a * b, topic: 'mul' };
+  },
+
+  /* Division — clean result; harder levels allow remainders */
+  div(L) {
+    const withRem = L >= 4 && Math.random() < 0.35;
+    let divisor, quotient;
+    if (L <= 2)      { divisor = rand(2,9);  quotient = rand(2,9); }
+    else if (L === 3){ divisor = rand(2,12); quotient = rand(2,12); }
+    else if (L === 4){ divisor = rand(2,12); quotient = rand(5,20); }
+    else if (L === 5){ divisor = rand(3,15); quotient = rand(8,30); }
+    else             { divisor = rand(4,19); quotient = rand(10,40); }
+    let dividend = divisor * quotient;
+    if (withRem) {
+      const r = rand(1, divisor - 1);
+      dividend += r;
+      return { text: `${dividend} ÷ ${divisor} (R?)`, answer: r, topic: 'div', note: 'remainder only' };
+    }
+    return { text: `${dividend} ÷ ${divisor}`, answer: quotient, topic: 'div' };
+  },
+
+  /* Percentages — exact */
+  pct(L) {
+    // Clean percents at low levels; messier at high
+    const cleanPcts = [10, 20, 25, 50, 75, 5, 15];
+    const messy = [12, 18, 22, 35, 45, 60, 80];
+    const p = L <= 3 ? pick(cleanPcts) : pick([...cleanPcts, ...messy]);
+    const baseMax = [100, 200, 500, 1000, 2000, 5000, 10000][clamp(L-1,0,6)];
+    let n = rand(2, baseMax);
+    // snap to multiple of 10 so answers stay reasonable at low L
+    if (L <= 3) n = Math.round(n / 10) * 10 || 10;
+    const ans = Math.round((p * n) / 100);
+    return { text: `${p}% of ${n}`, answer: ans, topic: 'pct' };
+  },
+
+  /* Mixed 2-step (Stage 2+) */
+  mix(L) {
+    const a = rand(2, 20 + L*5);
+    const b = rand(2, 12);
+    const c = rand(2, 10 + L*3);
+    const form = pick(['a*b+c', 'a+b*c', 'a*b-c', '(a+b)*c']);
+    let text, ans;
+    if (form === 'a*b+c')   { text = `${a} × ${b} + ${c}`;        ans = a*b + c; }
+    if (form === 'a+b*c')   { text = `${a} + ${b} × ${c}`;        ans = a + b*c; }
+    if (form === 'a*b-c')   { text = `${a} × ${b} − ${c}`;        ans = a*b - c; }
+    if (form === '(a+b)*c') { text = `(${a} + ${b}) × ${c}`;      ans = (a+b)*c; }
+    return { text, answer: ans, topic: 'mix' };
+  },
+
+  /* Guesstimate — approx percent, accept within tolerance */
+  est(L) {
+    const kind = pick(['pct', 'mul', 'ratio']);
+    if (kind === 'pct') {
+      const p = pick([17, 19, 23, 27, 31, 37, 43, 47, 62, 68, 78, 83, 92]);
+      const n = rand(80, 980);
+      const ans = (p * n) / 100;
+      return { text: `≈ ${p}% of ${n}`, answer: ans, topic: 'est', tolerance: 0.1 };
+    }
+    if (kind === 'mul') {
+      const a = rand(18, 98), b = rand(18, 98);
+      return { text: `≈ ${a} × ${b}`, answer: a*b, topic: 'est', tolerance: 0.1 };
+    }
+    // ratio approximation: a / b → decimal
+    const a = rand(20, 900), b = rand(10, 90);
+    return { text: `≈ ${a} ÷ ${b}`, answer: a/b, topic: 'est', tolerance: 0.12 };
+  },
+
+  /* Speed drill — trivial, very fast */
+  speed() {
+    const op = pick(['+','−','×']);
+    if (op === '+') { const a=rand(2,20), b=rand(2,20); return { text:`${a} + ${b}`, answer:a+b, topic:'add' }; }
+    if (op === '−') { let a=rand(2,30), b=rand(1,20); if(b>a)[a,b]=[b,a]; return { text:`${a} − ${b}`, answer:a-b, topic:'sub' }; }
+    const a=rand(2,12), b=rand(2,12); return { text:`${a} × ${b}`, answer:a*b, topic:'mul' };
+  },
+};
+
+/* =========================================================
+   2. TOPIC SELECTION by stage / focus
+   ========================================================= */
+const STAGE_TOPICS = {
+  1: ['add', 'sub', 'mul'],
+  2: ['add', 'sub', 'mul', 'div', 'pct', 'mix'],
+  3: ['est', 'pct', 'mix', 'mul', 'div'],
+};
+
+function nextQuestion(state) {
+  // Focus override
+  if (state.focus === 'speed') return Gen.speed();
+  if (state.focus !== 'mixed') {
+    const map = { add:'add', sub:'sub', mul:'mul', div:'div', pct:'pct', est:'est' };
+    return Gen[map[state.focus]](state.level);
+  }
+
+  // Weighted by recent weakness (adaptive topic mixing)
+  const topics = STAGE_TOPICS[state.stage];
+  const weights = topics.map(t => {
+    const s = state.topicStats[t] || { correct:0, total:0 };
+    // More weight when accuracy is low; still at least 1
+    const acc = s.total ? s.correct / s.total : 0.7;
+    return 1 + Math.max(0, 0.85 - acc) * 4;  // up to ~4.4x on weak topics
+  });
+  const total = weights.reduce((a,b)=>a+b,0);
+  let r = Math.random() * total;
+  let chosen = topics[0];
+  for (let i = 0; i < topics.length; i++) { r -= weights[i]; if (r <= 0) { chosen = topics[i]; break; } }
+  return Gen[chosen](state.level);
+}
+
+/* =========================================================
+   3. DIFFICULTY ENGINE
+   Level 1..7. Adjusts from rolling stats.
+   ========================================================= */
+function timeLimitFor(level, focus, streak) {
+  // base seconds at each level
+  const base = [10, 9, 8, 7, 6, 5.5, 5][clamp(level-1, 0, 6)];
+  let t = base;
+  if (focus === 'speed') t = Math.max(3, base - 3);
+  // streak >= 5: slight extra pressure
+  if (streak >= 5) t *= 0.9;
+  if (streak >= 10) t *= 0.9;
+  return Math.max(2.5, t);
+}
+
+function adaptDifficulty(state) {
+  const recent = state.history.slice(-10);
+  if (recent.length < 4) return;
+
+  const correct = recent.filter(h => h.ok).length;
+  const acc = correct / recent.length;
+  const avgT = recent.reduce((s,h)=>s+h.t,0) / recent.length;
+  const timeBudget = timeLimitFor(state.level, state.focus, 0);
+
+  // 2+ wrong in a row → back off
+  const last2 = state.history.slice(-2);
+  if (last2.length === 2 && last2.every(h => !h.ok)) {
+    if (state.level > 1) {
+      state.level -= 1;
+      state.cooldown = 4; // don't bump back up immediately
+    }
+    return;
+  }
+
+  if (state.cooldown > 0) { state.cooldown--; return; }
+
+  // Bump up
+  if (acc > 0.85 && avgT < timeBudget * 0.6 && state.level < 7) {
+    state.level += 1;
+    state.cooldown = 3;
+    return;
+  }
+  // Bump down
+  if (acc < 0.6 && state.level > 1) {
+    state.level -= 1;
+    state.cooldown = 3;
+  }
+}
+
+/* =========================================================
+   4. STATE
+   ========================================================= */
+let state = null;
+function freshState() {
+  return {
+    stage: 1,
+    focus: 'mixed',
+    lenMin: 5,
+    level: 1,
+    cooldown: 0,
+
+    current: null,           // { text, answer, topic, tolerance? }
+    questionStart: 0,
+    timerId: null,
+    timerDuration: 0,
+
+    history: [],             // [{ok, t, topic, level}]
+    streak: 0,
+    bestStreak: 0,
+    answered: 0,
+    correct: 0,
+    totalTime: 0,
+    topicStats: {},          // {topic: {correct, total, timeSum}}
+
+    sessionStart: 0,
+    sessionEnd: 0,
+    running: false,
+
+    feedbackLock: false,
+  };
+}
+
+/* =========================================================
+   5. TIMER
+   ========================================================= */
+function startTimer() {
+  const bar = $('#timerBar');
+  const seconds = timeLimitFor(state.level, state.focus, state.streak);
+  state.timerDuration = seconds;
+  state.questionStart = performance.now();
+
+  // reset bar
+  bar.style.transition = 'none';
+  bar.style.transform = 'scaleX(1)';
+  bar.classList.remove('danger');
+  // force reflow
+  void bar.offsetWidth;
+  bar.style.transition = `transform ${seconds}s linear, background-color .2s`;
+  bar.style.transform = 'scaleX(0)';
+
+  clearTimeout(state.timerId);
+  state.dangerId = setTimeout(() => bar.classList.add('danger'), seconds * 700);
+  state.timerId = setTimeout(() => {
+    if (!state.running) return;
+    handleAnswer(null, true); // timeout
+  }, seconds * 1000);
+}
+
+function stopTimer() {
+  clearTimeout(state.timerId);
+  clearTimeout(state.dangerId);
+}
+
+/* =========================================================
+   6. QUESTION FLOW
+   ========================================================= */
+function renderQuestion(q) {
+  // Format op for visual spacing
+  const pretty = q.text
+    .replace(/([+\-−×÷])/g, '<span class="op">$1</span>')
+    .replace(/≈/g, '<span class="op">≈</span>');
+  $('#question').innerHTML = pretty;
+  const inp = $('#answer');
+  inp.value = '';
+  inp.placeholder = q.tolerance ? '≈ ?' : '?';
+  inp.inputMode = 'decimal';
+  inp.focus();
+  $('#correctLine').textContent = '';
+  $('#correctLine').classList.remove('ok');
+  $('#hint').textContent = q.note || (q.tolerance ? 'Closest estimate — ±10%' : '');
+  $('#stage').classList.remove('flash-ok','flash-bad');
+  updateDifficultyMeter();
+}
+
+function newQuestion() {
+  state.current = nextQuestion(state);
+  renderQuestion(state.current);
+  startTimer();
+}
+
+function checkAnswer(input, q) {
+  if (input === null || input === '') return false;
+  const v = parseFloat(input);
+  if (Number.isNaN(v)) return false;
+  if (q.tolerance) {
+    const err = Math.abs(v - q.answer) / Math.max(1, Math.abs(q.answer));
+    return err <= q.tolerance;
+  }
+  return v === q.answer;
+}
+
+function formatAnswer(q) {
+  if (q.tolerance) {
+    // show rounded estimate
+    return Math.round(q.answer).toLocaleString();
+  }
+  return q.answer.toLocaleString();
+}
+
+function handleAnswer(input, timedOut = false) {
+  if (state.feedbackLock) return;
+  stopTimer();
+
+  const q = state.current;
+  const ok = !timedOut && checkAnswer(input, q);
+  const elapsed = (performance.now() - state.questionStart) / 1000;
+
+  // record
+  state.history.push({ ok, t: elapsed, topic: q.topic, level: state.level, timedOut });
+  state.answered++;
+  state.totalTime += elapsed;
+  if (ok) { state.correct++; state.streak++; state.bestStreak = Math.max(state.bestStreak, state.streak); }
+  else    { state.streak = 0; }
+
+  const ts = state.topicStats[q.topic] ||= { correct:0, total:0, timeSum:0 };
+  ts.total++; ts.timeSum += elapsed; if (ok) ts.correct++;
+
+  // feedback
+  const stage = $('#stage');
+  stage.classList.add(ok ? 'flash-ok' : 'flash-bad');
+
+  if (ok) {
+    // instant next
+    state.feedbackLock = true;
+    setTimeout(() => {
+      state.feedbackLock = false;
+      adaptDifficulty(state);
+      updateStats();
+      if (sessionShouldEnd()) return endSession();
+      newQuestion();
+    }, 120);
+  } else {
+    // show correct briefly
+    const line = $('#correctLine');
+    line.textContent = timedOut ? `TIME — was ${formatAnswer(q)}` : `was ${formatAnswer(q)}`;
+    state.feedbackLock = true;
+    setTimeout(() => {
+      state.feedbackLock = false;
+      adaptDifficulty(state);
+      updateStats();
+      if (sessionShouldEnd()) return endSession();
+      newQuestion();
+    }, 900);
+  }
+}
+
+/* =========================================================
+   7. STATS / UI
+   ========================================================= */
+function updateStats() {
+  $('#sStreak').textContent = state.streak;
+  $('#sBest').textContent = state.bestStreak;
+  $('#sAcc').textContent = state.answered ? Math.round((state.correct / state.answered) * 100) + '%' : '—';
+  $('#sAvg').textContent = state.answered ? (state.totalTime / state.answered).toFixed(1) + 's' : '—';
+  const remaining = Math.max(0, state.sessionEnd - Date.now());
+  const m = Math.floor(remaining / 60000), s = Math.floor((remaining % 60000) / 1000);
+  $('#sSession').textContent = `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function updateDifficultyMeter() {
+  for (let i = 1; i <= 7; i++) {
+    $('#d'+i).classList.toggle('on', i <= state.level);
+  }
+  $('#dNum').textContent = state.level;
+  // highlight current stage button
+  $$('#modeSwitch button').forEach(b => b.classList.toggle('active', +b.dataset.stage === state.stage));
+}
+
+/* =========================================================
+   8. SESSION LIFECYCLE
+   ========================================================= */
+function sessionShouldEnd() {
+  return Date.now() >= state.sessionEnd;
+}
+
+function startSession(opts) {
+  state = freshState();
+  Object.assign(state, opts);
+  // starting level by stage
+  state.level = { 1: 1, 2: 3, 3: 4 }[state.stage] || 1;
+  state.sessionStart = Date.now();
+  state.sessionEnd = state.sessionStart + state.lenMin * 60 * 1000;
+  state.running = true;
+
+  $('#startOverlay').style.display = 'none';
+  $('#resultsOverlay').style.display = 'none';
+  $('#app').style.display = 'grid';
+
+  updateStats();
+  updateDifficultyMeter();
+  newQuestion();
+
+  // live clock
+  clearInterval(state.clockId);
+  state.clockId = setInterval(() => {
+    if (!state.running) return;
+    updateStats();
+    if (sessionShouldEnd()) endSession();
+  }, 500);
+}
+
+function endSession() {
+  state.running = false;
+  stopTimer();
+  clearInterval(state.clockId);
+
+  const acc = state.answered ? state.correct / state.answered : 0;
+  const avg = state.answered ? state.totalTime / state.answered : 0;
+
+  $('#resTitle').textContent = state.answered === 0 ? 'No questions answered.' : verdictHeadline(acc);
+  $('#resSub').textContent   = `${state.stage === 3 ? 'Stage 3 · Guesstimate' : 'Stage ' + state.stage} · ${state.lenMin} min · focus: ${state.focus}`;
+
+  $('#rAcc').textContent   = state.answered ? Math.round(acc * 100) + '%' : '—';
+  $('#rTime').textContent  = state.answered ? avg.toFixed(2) + 's' : '—';
+  $('#rBest').textContent  = state.bestStreak;
+  $('#rTotal').textContent = `${state.correct}/${state.answered}`;
+
+  // Topics breakdown
+  const topicLabel = { add:'Addition', sub:'Subtraction', mul:'Multiplication', div:'Division', pct:'Percentages', mix:'Mixed ops', est:'Guesstimate' };
+  const topicsEl = $('#rTopics');
+  topicsEl.innerHTML = '';
+  const entries = Object.entries(state.topicStats).sort((a,b)=>b[1].total - a[1].total);
+  if (!entries.length) {
+    topicsEl.innerHTML = '<div class="muted">—</div>';
+  } else {
+    entries.forEach(([t, s]) => {
+      const a = s.total ? (s.correct / s.total) : 0;
+      const avg = s.total ? s.timeSum / s.total : 0;
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+      row.innerHTML = `
+        <div>${topicLabel[t] || t}</div>
+        <div class="n">${s.correct}/${s.total} · ${Math.round(a*100)}% · ${avg.toFixed(1)}s</div>
+      `;
+      topicsEl.appendChild(row);
+    });
+  }
+
+  $('#rVerdict').innerHTML = buildVerdict(acc, avg, entries);
+
+  // Persist to localStorage
+  saveSession({
+    ts: Date.now(),
+    stage: state.stage,
+    focus: state.focus,
+    lenMin: state.lenMin,
+    answered: state.answered,
+    correct: state.correct,
+    acc: acc,
+    avgTime: avg,
+    bestStreak: state.bestStreak,
+    maxLevel: Math.max(...state.history.map(h => h.level), state.level),
+    topicStats: state.topicStats,
+  });
+
+  $('#app').style.display = 'none';
+  $('#resultsOverlay').style.display = 'grid';
+}
+
+function verdictHeadline(acc) {
+  if (acc >= 0.95) return 'Clean sheet.';
+  if (acc >= 0.85) return 'Sharp.';
+  if (acc >= 0.7)  return 'Getting there.';
+  if (acc >= 0.5)  return 'Shaky. Again?';
+  return 'Rough round.';
+}
+
+function buildVerdict(acc, avg, entries) {
+  if (!entries.length) return 'Not enough data. Run a real session.';
+  // Weakest topic: lowest accuracy with ≥3 attempts, else slowest
+  const eligible = entries.filter(([,s]) => s.total >= 3);
+  let weak = null;
+  if (eligible.length) {
+    weak = eligible.reduce((w, cur) => {
+      const [,s] = cur, a = s.correct/s.total;
+      if (!w) return cur;
+      const [,ws] = w, wa = ws.correct/ws.total;
+      if (a < wa) return cur;
+      if (a === wa && (s.timeSum/s.total) > (ws.timeSum/ws.total)) return cur;
+      return w;
+    }, null);
+  }
+  const label = { add:'addition', sub:'subtraction', mul:'multiplication', div:'division', pct:'percentages', mix:'mixed operations', est:'guesstimation' };
+
+  const parts = [];
+  parts.push(`<b>${Math.round(acc*100)}% accuracy</b> at <b>${avg.toFixed(1)}s</b> per question across ${state.answered} questions.`);
+  if (weak) {
+    const [t, s] = weak;
+    const wa = Math.round((s.correct/s.total)*100);
+    const wt = (s.timeSum/s.total).toFixed(1);
+    parts.push(`Weak spot: <b>${label[t] || t}</b> (${wa}%, ${wt}s avg). Try a focused run on it next.`);
+  } else if (acc >= 0.85 && avg < 4) {
+    parts.push(`Speed and accuracy both holding. Bump the stage up.`);
+  } else if (acc < 0.6) {
+    parts.push(`Drop a stage, rebuild the floor.`);
+  } else {
+    parts.push(`Keep the mix. Focus runs only when you spot a weak topic.`);
+  }
+  return parts.join(' ');
+}
+
+/* =========================================================
+   9. EVENT WIRING
+   ========================================================= */
+// Start overlay config
+const cfg = { stage: null, focus: 'mixed', len: null };
+
+$$('#stageRow .chip').forEach(b => b.addEventListener('click', () => {
+  $$('#stageRow .chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  cfg.stage = +b.dataset.stage;
+}));
+$$('#focusRow .chip').forEach(b => b.addEventListener('click', () => {
+  $$('#focusRow .chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  cfg.focus = b.dataset.focus;
+}));
+$$('#lenRow .chip').forEach(b => b.addEventListener('click', () => {
+  $$('#lenRow .chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  cfg.len = +b.dataset.len;
+}));
+
+// defaults selected
+$('#stageRow .chip[data-stage="1"]').click();
+$('#lenRow .chip[data-len="3"]').click();
+
+$('#startBtn').addEventListener('click', () => {
+  startSession({ stage: cfg.stage, focus: cfg.focus, lenMin: cfg.len });
+});
+
+// In-session controls
+$('#answer').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (state && state.running) handleAnswer($('#answer').value.trim());
+  }
+});
+
+$('#submitBtn').addEventListener('click', () => {
+  if (state && state.running) {
+    handleAnswer($('#answer').value.trim());
+    $('#answer').focus();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!state || !state.running) return;
+  if (e.key === 'Escape') { endSession(); }
+  // Stage switch on the fly
+  if (['1','2','3'].includes(e.key) && e.target !== $('#answer')) {
+    state.stage = +e.key;
+    state.level = { 1: 1, 2: 3, 3: 4 }[state.stage];
+    updateDifficultyMeter();
+  }
+});
+
+$$('#modeSwitch button').forEach(b => b.addEventListener('click', () => {
+  if (!state || !state.running) return;
+  state.stage = +b.dataset.stage;
+  state.level = { 1: 1, 2: 3, 3: 4 }[state.stage];
+  updateDifficultyMeter();
+  $('#answer').focus();
+}));
+
+$('#endBtn').addEventListener('click', () => { if (state && state.running) endSession(); });
+
+// Results overlay
+$('#againBtn').addEventListener('click', () => {
+  startSession({ stage: state.stage, focus: state.focus, lenMin: state.lenMin });
+});
+$('#backBtn').addEventListener('click', () => {
+  $('#resultsOverlay').style.display = 'none';
+  $('#startOverlay').style.display = 'grid';
+  renderHistory();
+});
+
+// History clear
+$('#clearHistBtn').addEventListener('click', () => {
+  if (confirm('Clear all session history?')) {
+    Store.clear();
+    renderHistory();
+  }
+});
+
+// Initial render
+renderHistory();
+
+</script>
+</body>
+</html>
